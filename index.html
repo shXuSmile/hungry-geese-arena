@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>蛇阵 · Hungry Geese 对战台</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%23342347'/%3E%3Cpath d='M10 28h10a4 4 0 0 0 0-8h-2a4 4 0 0 1 0-8h11' fill='none' stroke='%23d9b9ff' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/arena.css">
+  <script src="/arena.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <svg class="brand-icon" viewBox="0 0 40 40" aria-hidden="true">
+          <path d="M10 28h10a4 4 0 0 0 0-8h-2a4 4 0 0 1 0-8h11" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+          <circle cx="29" cy="12" r="4.5" fill="currentColor"/>
+          <circle cx="30" cy="11" r="1" fill="#151223"/>
+        </svg>
+        <div><strong>蛇阵</strong><small>HUNGRY GEESE</small></div>
+      </div>
+      <span class="local-tag"><i></i>本地对战台</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="intro" aria-labelledby="page-title">
+      <div>
+        <h1 id="page-title">对战竞技场</h1>
+        <p>四条蛇，同一张地图。抢果实、留退路，活到最后。</p>
+      </div>
+      <div class="match-actions">
+        <select id="mode" aria-label="对局规则">
+          <option value="walls">实验场</option>
+          <option value="kaggle">Kaggle 原版</option>
+        </select>
+        <button id="same-seed" type="button" class="secondary" disabled>复用开局</button>
+        <button id="new-match" type="button" class="primary">开始新局 <span aria-hidden="true">↗</span></button>
+      </div>
+    </section>
+
+    <p id="notice" class="notice" role="alert" hidden></p>
+
+    <div class="layout">
+      <section class="panel arena" aria-labelledby="board-title">
+        <div class="panel-head">
+          <div><h2 id="board-title">对局棋盘</h2><span id="board-size" class="subtle">11 × 7</span></div>
+          <div class="stats">
+            <span class="stat">回合 <b id="round">—</b></span>
+            <span class="stat hunger">距缩短 <b id="hunger">—</b></span>
+          </div>
+        </div>
+        <div class="board-shell">
+          <canvas id="board" width="660" height="420" role="img" aria-label="对局棋盘"></canvas>
+          <div id="board-message" class="board-message" role="status">正在准备棋盘…</div>
+        </div>
+        <div class="replay">
+          <div class="timeline">
+            <input id="scrubber" type="range" min="0" max="0" value="0" aria-label="跳转到回合" disabled>
+            <span id="timeline-text">— / —</span>
+          </div>
+          <div class="replay-buttons">
+            <button id="previous" type="button" aria-label="上一步" title="上一步" disabled>‹</button>
+            <button id="play" type="button" class="play" disabled>▶ 播放</button>
+            <button id="next" type="button" aria-label="下一步" title="下一步" disabled>›</button>
+            <label class="speed">速度
+              <select id="speed">
+                <option value="0.5">0.5×</option>
+                <option value="1" selected>1×</option>
+                <option value="2">2×</option>
+                <option value="4">4×</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel roster" aria-labelledby="players-title">
+        <div class="panel-head">
+          <div><h2 id="players-title">参赛选手</h2><span id="alive" class="subtle">等待开局</span></div>
+          <span class="seat-count" aria-hidden="true">04</span>
+        </div>
+        <div id="players" class="player-list"></div>
+        <div class="match-meta">
+          <span>开局种子</span><code id="seed">—</code>
+        </div>
+      </aside>
+    </div>
+    <footer><span><i class="fruit-dot"></i>果实 +1 格</span><span id="boundary">撞墙淘汰</span><span id="rule">每 40 回合缩短 1 格</span></footer>
+  </main>
+</body>
+</html>
