@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import random
@@ -11,6 +12,7 @@ import webbrowser
 from contextlib import redirect_stdout
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 HERE = Path(__file__).resolve().parent
 GAME = Path(os.environ.get("HUNGRY_GEESE_ENGINE", HERE.parent / "hungry-geese")).expanduser().resolve()
@@ -28,8 +30,14 @@ def simulate(seed: int, mode: str = "walls") -> dict:
 
     custom_agent = HERE / "agent.py"
     players = ["greedy"] * 4
+    baseline_source = (
+        HERE / "wall_rules.py" if mode == "walls" else
+        GAME / "kaggle_environments" / "envs" / "hungry_geese" / "hungry_geese.py"
+    )
+    strategy_versions = [hashlib.sha256(baseline_source.read_bytes()).hexdigest()] * 4
     if custom_agent.is_file():
         players[0] = str(custom_agent)
+        strategy_versions[0] = hashlib.sha256(custom_agent.read_bytes()).hexdigest()
 
     random.seed(seed)
     if mode == "walls":
@@ -48,6 +56,7 @@ def simulate(seed: int, mode: str = "walls") -> dict:
         "columns": env.configuration.columns,
         "hungerRate": env.configuration.hunger_rate,
         "players": ["你的 agent.py" if players[0] != "greedy" else baseline] + [baseline] * 3,
+        "strategyVersions": strategy_versions,
         "frames": [
             {
                 "snakes": turn[0].observation.geese,
@@ -135,14 +144,31 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument("--open", action="store_true")
-    parser.add_argument("--simulate", type=int, help=argparse.SUPPRESS)
-    parser.add_argument("--mode", choices=MODES, default="walls", help=argparse.SUPPRESS)
+    parser.add_argument("--simulate", type=int, metavar="SEED", help="运行指定种子的对局后退出")
+    parser.add_argument("--mode", choices=MODES, default="walls", help="模拟对局的规则")
+    parser.add_argument("--save-replay", type=Path, metavar="FILE", help="将模拟对局保存为 JSON 文件")
     args = parser.parse_args()
 
+    if args.save_replay is not None and args.simulate is None:
+        parser.error("--save-replay 需要同时指定 --simulate SEED")
     if args.simulate is not None:
+        if not 0 <= args.simulate < 2**32:
+            parser.error("开局种子须在 0 到 4294967295 之间")
         with redirect_stdout(sys.stderr):
             result = simulate(args.simulate, args.mode)
-        print(json.dumps(result, ensure_ascii=False))
+        payload = json.dumps(result, ensure_ascii=False)
+        if args.save_replay is None:
+            print(payload)
+        else:
+            try:
+                args.save_replay.parent.mkdir(parents=True, exist_ok=True)
+                with NamedTemporaryFile(mode="w", encoding="utf-8", dir=args.save_replay.parent) as replay:
+                    replay.write(payload + "\n")
+                    replay.flush()
+                    os.link(replay.name, args.save_replay)
+            except OSError as error:
+                parser.exit(1, f"保存回放失败：{error}\n")
+            print(args.save_replay.resolve())
         return
 
     if not (GAME / "kaggle_environments").is_dir():

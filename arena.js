@@ -3,6 +3,8 @@ const canvas = byId("board");
 const context = canvas.getContext("2d");
 const newMatchButton = byId("new-match");
 const sameSeedButton = byId("same-seed");
+const openReplayButton = byId("open-replay");
+const replayFile = byId("replay-file");
 const modeSelect = byId("mode");
 const slider = byId("scrubber");
 const previousButton = byId("previous");
@@ -138,7 +140,9 @@ function renderPlayers(frame, finished) {
     const eliminationRound = match.eliminatedAt[index];
     const hitWall = match.frames[eliminationRound]?.wallHits?.includes(index);
     card.querySelector("strong").textContent = match.players[index];
-    card.querySelector("small").textContent = problemLabels[frame.statuses[index]] ??
+    const status = frame.statuses[index];
+    const problem = Object.hasOwn(problemLabels, status) ? problemLabels[status] : null;
+    card.querySelector("small").textContent = problem ??
       (snake.length ? directions[frame.actions[index]]?.[2] ?? "待出发" :
         `第 ${eliminationRound} 回合${hitWall ? "撞墙" : "淘汰"}`);
     card.querySelector("b").textContent = finished ? `第 ${place} 名` : `${snake.length} 格`;
@@ -185,12 +189,41 @@ function play() {
   }, 240 / Number(speedSelect.value));
 }
 
-async function startMatch(seed, autoplay) {
+function validateReplay(data) {
+  const boardSize = (value) => Number.isInteger(value) && value > 0 && value * cell <= 4096;
+  const seats = (values, valid) => Array.isArray(values) && values.length === palettes.length && values.every(valid);
+  if (!data || !["walls", "kaggle"].includes(data.mode) ||
+      !Number.isInteger(data.seed) || data.seed < 0 || data.seed >= 2 ** 32 ||
+      !boardSize(data.rows) || !boardSize(data.columns) ||
+      !Number.isInteger(data.hungerRate) || data.hungerRate <= 0 ||
+      !seats(data.players, (name) => typeof name === "string") ||
+      !Array.isArray(data.frames) || data.frames.length === 0) {
+    throw new Error("回放缺少有效的对局信息。");
+  }
+
+  const boardPositions = (values) => Array.isArray(values) && values.every((position) =>
+    Number.isInteger(position) && position >= 0 && position < data.rows * data.columns);
+  for (const [index, frame] of data.frames.entries()) {
+    if (!frame || !seats(frame.snakes, boardPositions) || !boardPositions(frame.food) ||
+        !seats(frame.actions, (action) => action === null ||
+          (typeof action === "string" && Object.hasOwn(directions, action))) ||
+        !seats(frame.scores, (score) => score === null || Number.isFinite(score)) ||
+        !seats(frame.statuses, (status) => typeof status === "string") ||
+        (frame.wallHits !== undefined && (!Array.isArray(frame.wallHits) ||
+          !frame.wallHits.every((seat) => Number.isInteger(seat) && seat >= 0 && seat < palettes.length)))) {
+      throw new Error(`回放的第 ${index} 回合数据无效。`);
+    }
+  }
+  return data;
+}
+
+async function loadMatch(readMatch, message, autoplay = false) {
   if (loading) return;
   loading = true;
   pause();
   newMatchButton.disabled = true;
   sameSeedButton.disabled = true;
+  openReplayButton.disabled = true;
   modeSelect.disabled = true;
   slider.disabled = true;
   playButton.disabled = true;
@@ -198,18 +231,10 @@ async function startMatch(seed, autoplay) {
   nextButton.disabled = true;
   notice.hidden = true;
   boardMessage.hidden = false;
-  boardMessage.textContent = "正在生成对局…";
+  boardMessage.textContent = message;
 
   try {
-    const response = await fetch("/api/match", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ seed, mode: modeSelect.value }),
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error ?? "开局失败。");
-
-    match = result;
+    match = await readMatch();
     match.eliminatedAt = match.players.map((_, index) =>
       match.frames.findIndex((frame) => frame.snakes[index].length === 0)
     );
@@ -222,7 +247,7 @@ async function startMatch(seed, autoplay) {
     canvas.parentElement.classList.toggle("walls", match.mode === "walls");
     byId("rule").textContent = `每 ${match.hungerRate} 回合缩短 1 格`;
     showRound(0);
-    if (autoplay) play();
+    if (autoplay && match.frames.length > 1) play();
   } catch (error) {
     notice.textContent = error.message;
     notice.hidden = false;
@@ -232,16 +257,47 @@ async function startMatch(seed, autoplay) {
     loading = false;
     newMatchButton.disabled = false;
     sameSeedButton.disabled = !match;
+    openReplayButton.disabled = false;
     modeSelect.disabled = false;
     if (match) {
       modeSelect.value = match.mode;
       slider.disabled = false;
-      playButton.disabled = false;
+      playButton.disabled = match.frames.length < 2;
       previousButton.disabled = round === 0;
       nextButton.disabled = round === match.frames.length - 1;
     }
   }
 }
+
+function startMatch(seed, autoplay) {
+  return loadMatch(async () => {
+    const response = await fetch("/api/match", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ seed, mode: modeSelect.value }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error ?? "开局失败。");
+    return result;
+  }, "正在生成对局…", autoplay);
+}
+
+openReplayButton.addEventListener("click", () => replayFile.click());
+replayFile.addEventListener("change", () => {
+  const file = replayFile.files[0];
+  replayFile.value = "";
+  if (!file) return;
+  loadMatch(async () => {
+    const contents = await file.text();
+    let data;
+    try {
+      data = JSON.parse(contents);
+    } catch {
+      throw new Error("无法读取回放，请选择实验场生成的 JSON 文件。");
+    }
+    return validateReplay(data);
+  }, "正在读取回放…");
+});
 
 newMatchButton.addEventListener("click", () => startMatch(null, true));
 sameSeedButton.addEventListener("click", () => startMatch(match.seed, true));

@@ -34,6 +34,10 @@ python3 -m venv .venv
 
 点「开始新局」生成一场对局。点「复用开局」可以用同一个随机种子再打一场。回放支持暂停、逐步前进和后退、跳转与倍速。
 
+回放按 `replays/裁判模式/参赛策略/seed-编号.json` 存放。`walls/all-greedy/` 是四条 Greedy 的基线，`walls/tail-v1-vs-3-greedy/` 是绿蛇使用蛇尾规则、其余三条使用 Greedy 的对局。Kaggle 原版回放放在 `replays/kaggle/` 下。
+
+绿蛇使用蛇尾规则时，运行 `.venv/bin/python arena.py --simulate 42 --save-replay replays/walls/tail-v1-vs-3-greedy/seed-42.json` 可保存一局完整回放。在网页点「打开回放」并选择该 JSON，即可查看原来的对局。
+
 - **实验场**默认使用墙版规则。蛇头越界立即淘汰，棋盘随机补果至 2 个，每 40 回合缩短一格。基线蛇按墙版规则选路。
 - **Kaggle 原版**使用官方裁判和官方 Greedy。边界相通。切换模式时会沿用当前的开局种子。
 
